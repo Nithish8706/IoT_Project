@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1714">
+  <title>Smart Eco-Bin | Live Monitoring</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1714;
+      --panel: #12231e;
+      --panel-2: #172d25;
+      --line: #28483a;
+      --text: #edf8f1;
+      --muted: #9ab4a5;
+      --green: #55e39a;
+      --yellow: #ffd166;
+      --orange: #ff9f43;
+      --red: #ff626e;
+      --blue: #78baff;
+      --radius: 20px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(ellipse at 10% 0%, rgba(49, 146, 94, .18), transparent 38rem),
+        radial-gradient(ellipse at 100% 20%, rgba(61, 133, 169, .12), transparent 32rem),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { max-width: 1240px; width: min(100% - 32px, 1240px); margin: 0 auto; }
+    header { padding: 28px 0 22px; border-bottom: 1px solid rgba(154,180,165,.15); }
+    .topline { display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; }
+    .brand { display:flex; align-items:center; gap:14px; }
+    .brand-mark {
+      width: 54px; height:54px; border-radius:17px; display:grid; place-items:center;
+      background: linear-gradient(145deg, #2aa96b, #176b45); box-shadow:0 10px 28px #2aa96b25;
+      font-size:27px;
+    }
+    h1 { margin:0; font-size:clamp(1.5rem, 4vw, 2.25rem); letter-spacing:-.04em; }
+    .subtitle { color:var(--muted); margin:6px 0 0; }
+    .header-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .pill, .btn {
+      display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line);
+      border-radius:999px; padding:10px 14px; background:var(--panel); color:var(--text);
+    }
+    .btn:hover { border-color:var(--green); }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--yellow); display:inline-block; }
+    .dot.live { background:var(--green); box-shadow:0 0 0 4px #55e39a18; }
+    .dot.error { background:var(--red); }
+    main { padding:26px 0 44px; }
+    .section-heading { display:flex; align-items:end; justify-content:space-between; gap:16px; margin:0 0 15px; flex-wrap:wrap; }
+    .section-heading h2 { margin:0; font-size:1.08rem; letter-spacing:-.02em; }
+    .section-heading p { margin:6px 0 0; color:var(--muted); font-size:.9rem; }
+    .overview {
+      display:grid; grid-template-columns:1.45fr .8fr; gap:18px; margin-bottom:20px;
+    }
+    .panel {
+      background:linear-gradient(145deg, rgba(23,45,37,.96), rgba(18,35,30,.98));
+      border:1px solid var(--line); border-radius:var(--radius); padding:22px;
+      box-shadow:0 14px 40px #00000016; min-width:0;
+    }
+    .hero-panel { display:grid; grid-template-columns:1fr 170px; align-items:center; gap:18px; overflow:hidden; }
+    .eyebrow { color:var(--green); text-transform:uppercase; letter-spacing:.13em; font-size:.72rem; font-weight:800; }
+    .hero-panel h2 { margin:9px 0 8px; font-size:clamp(1.4rem,3vw,2.15rem); letter-spacing:-.04em; }
+    .hero-panel p { margin:0; color:var(--muted); line-height:1.55; }
+    .bin-visual { width:150px; max-width:100%; justify-self:center; }
+    .health-panel { display:flex; flex-direction:column; justify-content:space-between; gap:22px; }
+    .health-title { color:var(--muted); font-size:.9rem; }
+    .health-status { font-size:1.35rem; font-weight:800; margin-top:8px; }
+    .health-note { color:var(--muted); font-size:.86rem; line-height:1.5; }
+    .metrics { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:14px; margin-bottom:20px; }
+    .metric { padding:18px; }
+    .metric-top { display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--muted); font-size:.84rem; }
+    .metric-icon { width:34px; height:34px; border-radius:11px; display:grid; place-items:center; background:#ffffff09; font-size:1.05rem; }
+    .metric-value { font-size:clamp(1.45rem,2.5vw,2rem); font-weight:800; letter-spacing:-.045em; margin:15px 0 7px; overflow-wrap:anywhere; }
+    .metric-foot { color:var(--muted); font-size:.8rem; }
+    .fill-track { height:8px; background:#ffffff12; border-radius:99px; overflow:hidden; margin-top:13px; }
+    .fill-track > span { display:block; height:100%; width:0; background:var(--green); border-radius:inherit; transition:width .45s ease, background .3s ease; }
+    .content-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(280px,.85fr); gap:18px; margin-bottom:20px; }
+    .chart-wrap { height:300px; position:relative; }
+    .chart-controls { display:flex; gap:8px; flex-wrap:wrap; }
+    .chart-controls button { padding:7px 11px; font-size:.82rem; }
+    .chart-controls button.active { background:#1b5d40; border-color:#55e39a; }
+    .events { display:grid; gap:12px; }
+    .event { display:flex; gap:11px; align-items:flex-start; padding:12px; border-radius:13px; background:#ffffff06; border:1px solid #ffffff0b; }
+    .event-symbol { width:30px; height:30px; flex:0 0 30px; border-radius:10px; display:grid; place-items:center; background:#ffffff0b; }
+    .event strong { display:block; font-size:.9rem; margin:1px 0 4px; }
+    .event small { color:var(--muted); line-height:1.4; }
+    .empty-state { color:var(--muted); font-size:.9rem; line-height:1.5; }
+    .status-chip { display:inline-flex; align-items:center; gap:7px; border-radius:99px; padding:6px 10px; font-size:.78rem; font-weight:750; background:#ffffff0b; border:1px solid #ffffff12; }
+    .status-chip.good { color:var(--green); }
+    .status-chip.warn { color:var(--yellow); }
+    .status-chip.bad { color:var(--red); }
+    .status-chip.info { color:var(--blue); }
+    .section-gap { margin-top:23px; }
+    .config { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; align-items:end; }
+    .field label { display:block; color:var(--muted); font-size:.82rem; margin:0 0 7px; }
+    .field input { width:100%; background:#0b1714; border:1px solid var(--line); border-radius:11px; padding:11px 12px; color:var(--text); min-width:0; }
+    .config-note { color:var(--muted); font-size:.8rem; line-height:1.5; margin:12px 0 0; }
+    footer { border-top:1px solid rgba(154,180,165,.15); color:var(--muted); padding:20px 0 30px; font-size:.85rem; }
+    .footer-row { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    @media (max-width:1000px) {
+      .metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .overview { grid-template-columns:1fr; }
+      .health-panel { min-height:130px; }
+    }
+    @media (max-width:720px) {
+      .content-grid { grid-template-columns:1fr; }
+      .hero-panel { grid-template-columns:1fr 115px; padding:18px; }
+      .bin-visual { width:110px; }
+      .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+      .panel { padding:17px; }
+      .metric { padding:15px; }
+      .config { grid-template-columns:1fr; }
+      .chart-wrap { height:260px; }
+    }
+    @media (max-width:390px) {
+      .shell { width:min(100% - 20px,1240px); }
+      .metrics { grid-template-columns:1fr 1fr; }
+      .hero-panel { grid-template-columns:1fr; }
+      .bin-visual { display:none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell topline">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">♻</div>
+        <div>
+          <h1>Smart Eco-Bin</h1>
+          <p class="subtitle">IoT waste monitoring · Live system dashboard</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span class="pill"><span id="connectionDot" class="dot"></span><span id="connectionText">Waiting for data</span></span>
+        <button class="btn" id="refreshBtn" type="button">↻ Refresh now</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="overview">
+      <article class="panel hero-panel">
+        <div>
+          <div class="eyebrow">Live bin overview</div>
+          <h2 id="heroTitle">Monitoring your bin</h2>
+          <p id="heroDescription">Waiting for the first valid sensor reading from your ESP32.</p>
+          <div style="margin-top:16px"><span class="status-chip info" id="lastUpdateChip">◷ No reading yet</span></div>
+        </div>
+        <svg class="bin-visual" viewBox="0 0 160 180" role="img" aria-label="Illustration of a smart waste bin">
+          <defs>
+            <linearGradient id="binGrad" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#2d8158"/><stop offset="100%" stop-color="#164b35"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="80" cy="164" rx="52" ry="9" fill="#000" opacity=".22"/>
+          <path id="binWaste" d="M45 89 L115 89 L107 145 Q80 153 53 145 Z" fill="#55e39a" opacity=".85"/>
+          <path d="M42 57 L118 57 L109 148 Q80 160 51 148 Z" fill="url(#binGrad)" stroke="#65d89a" stroke-width="2"/>
+          <path d="M38 52 L122 52 L118 62 L42 62 Z" fill="#8be5b3"/>
+          <path id="binLid" d="M35 48 L125 48 L130 39 L40 39 Z" fill="#55e39a" stroke="#b4ffd2" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M67 31 L93 31 L96 38 L64 38 Z" fill="#b4ffd2"/>
+          <path d="M58 75 L64 135 M80 73 L80 142 M102 75 L96 135" stroke="#b4ffd2" stroke-width="3" opacity=".28" stroke-linecap="round"/>
+          <circle cx="62" cy="155" r="5" fill="#9ab4a5"/><circle cx="98" cy="155" r="5" fill="#9ab4a5"/>
+        </svg>
+      </article>
+      <article class="panel health-panel">
+        <div>
+          <div class="health-title">Bin condition</div>
+          <div class="health-status" id="healthStatus">Awaiting data</div>
+          <p class="health-note" id="healthNote">The condition will update from the latest fill-level reading.</p>
+        </div>
+        <div>
+          <div class="health-title">Fill capacity</div>
+          <div class="fill-track" style="height:12px"><span id="heroFillBar"></span></div>
+          <div class="health-note" id="capacityNote" style="margin-top:8px">--% used</div>
+        </div>
+      </article>
+    </section>
+
+    <div class="section-heading">
+      <div><h2>Live measurements</h2><p>Latest values reported by the ESP32.</p></div>
+      <span class="status-chip info" id="pollStatus">Auto-refresh every 20 sec</span>
+    </div>
+    <section class="metrics" aria-label="Live sensor metrics">
+      <article class="panel metric">
+        <div class="metric-top"><span>Fill level</span><span class="metric-icon">◒</span></div>
+        <div class="metric-value" id="fillValue">--%</div>
+        <div class="metric-foot" id="fillFoot">Capacity occupied</div>
+        <div class="fill-track"><span id="fillBar"></span></div>
+      </article>
+      <article class="panel metric">
+        <div class="metric-top"><span>Fill distance</span><span class="metric-icon">↕</span></div>
+        <div class="metric-value" id="distanceValue">-- <small style="font-size:.9rem;font-weight:600">cm</small></div>
+        <div class="metric-foot">Sensor to waste surface</div>
+      </article>
+      <article class="panel metric">
+        <div class="metric-top"><span>Lid status</span><span class="metric-icon">↗</span></div>
+        <div class="metric-value" id="lidValue">--</div>
+        <div class="metric-foot" id="lidFoot">Servo-controlled lid</div>
+      </article>
+      <article class="panel metric">
+        <div class="metric-top"><span>Person detection</span><span class="metric-icon">◎</span></div>
+        <div class="metric-value" id="personValue">--</div>
+        <div class="metric-foot" id="personFoot">Ultrasonic proximity</div>
+      </article>
+      <article class="panel metric">
+        <div class="metric-top"><span>Bin condition</span><span class="metric-icon">♧</span></div>
+        <div class="metric-value" id="conditionValue">--</div>
+        <div class="metric-foot" id="conditionFoot">Fill threshold: 90%</div>
+      </article>
+    </section>
+
+    <section class="content-grid">
+      <article class="panel">
+        <div class="section-heading">
+          <div><h2>Fill-level history</h2><p>Recent readings from ThingSpeak.</p></div>
+          <div class="chart-controls" aria-label="Chart range">
+            <button class="btn active" data-range="20" type="button">20 points</button>
+            <button class="btn" data-range="50" type="button">50 points</button>
+            <button class="btn" data-range="100" type="button">100 points</button>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="fillChart" aria-label="Fill level over time" role="img"></canvas></div>
+      </article>
+      <article class="panel">
+        <div class="section-heading"><div><h2>System activity</h2><p>Events inferred from incoming readings.</p></div></div>
+        <div id="events" class="events"><p class="empty-state">Activity will appear after data arrives.</p></div>
+      </article>
+    </section>
+
+    <section class="panel section-gap">
+      <div class="section-heading">
+        <div><h2>Connection settings</h2><p>Enter your channel details to load live readings.</p></div>
+      </div>
+      <form id="settingsForm" class="config">
+        <div class="field">
+          <label for="channelId">ThingSpeak Channel ID</label>
+          <input id="channelId" inputmode="numeric" autocomplete="off" placeholder="e.g. 1234567" required>
+        </div>
+        <div class="field">
+          <label for="readKey">Read API key (private channels only)</label>
+          <input id="readKey" autocomplete="off" spellcheck="false" placeholder="Leave blank for public channel">
+        </div>
+        <button class="btn" type="submit">Apply settings</button>
+      </form>
+      <p class="config-note">Settings are kept only in this page while it is open. For a public channel, leave the Read API key blank. Never put your ThingSpeak Write API key or Wi-Fi password in this website.</p>
+    </section>
+  </main>
+
+  <footer><div class="shell footer-row"><span>🌿 Smart Eco-Bin Monitoring System</span><span id="footerStatus">Waiting for ThingSpeak data</span></div></footer>
+
+  <script>
+    // Optional: prefill a public channel ID here, or enter settings in the page.
+    const DEFAULT_CHANNEL_ID = "";
+    const DEFAULT_READ_API_KEY = "";
+    const POLL_INTERVAL_MS = 20000;
+    let channelId = DEFAULT_CHANNEL_ID.trim();
+    let readApiKey = DEFAULT_READ_API_KEY.trim();
+    let chart = null;
+    let chartRange = 20;
+    let pollTimer = null;
+    let historyTimer = null;
+    let previousSnapshot = null;
+    const activityItems = [];
+    const $ = (id) => document.getElementById(id);
+
+    function setConnection(state, text) {
+      $("connectionDot").className = "dot" + (state === "live" ? " live" : state === "error" ? " error" : "");
+      $("connectionText").textContent = text;
+      $("footerStatus").textContent = text;
+    }
+
+    function setStatusChip(id, text, type = "info") {
+      const el = $(id);
+      el.className = "status-chip " + type;
+      el.textContent = text;
+    }
+
+    function buildFeedsUrl(count) {
+      const url = new URL(`https://api.thingspeak.com/channels/${encodeURIComponent(channelId)}/feeds.json`);
+      url.searchParams.set("results", String(count));
+      if (readApiKey) url.searchParams.set("api_key", readApiKey);
+      return url;
+    }
+
+    async function fetchJson(url) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(url, { cache: "no-store", signal: controller.signal });
+        if (!response.ok) throw new Error(`ThingSpeak returned HTTP ${response.status}. Check the channel ID and Read API key.`);
+        return await response.json();
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    function parseSnapshot(item) {
+      if (!item || !item.entry_id) throw new Error("No readings found for this channel yet.");
+      const fields = [item.field1, item.field2, item.field3, item.field4, item.field5];
+      if (fields.some(value => value === null || value === undefined || String(value).trim() === "")) {
+        throw new Error("One or more channel fields are empty. Check that ESP32 uploads all five fields.");
+      }
+      const [fill, distance, lid, person, full] = fields.map(Number);
+      if (![fill, distance, lid, person, full].every(Number.isFinite) ||
+          fill < 0 || fill > 100 || distance < 0 ||
+          ![0,1].includes(lid) || ![0,1].includes(person) || ![0,1].includes(full)) {
+        throw new Error("The latest sensor reading contains invalid values.");
+      }
+      return { entryId: Number(item.entry_id), createdAt: item.created_at, fill, distance, lid, person, full };
+    }
+
+    function conditionFrom(fill, full) {
+      if (full === 1 || fill >= 90) return { label: "FULL", note: "Capacity threshold reached. Empty the bin soon.", type: "bad", color: "var(--red)" };
+      if (fill >= 80) return { label: "NEARLY FULL", note: "The bin is approaching capacity.", type: "warn", color: "var(--orange)" };
+      if (fill >= 50) return { label: "MEDIUM", note: "There is room available, but keep monitoring.", type: "warn", color: "var(--yellow)" };
+      return { label: "NORMAL", note: "The bin has available capacity.", type: "good", color: "var(--green)" };
+    }
+
+    function renderSnapshot(s) {
+      const condition = conditionFrom(s.fill, s.full);
+      $("fillValue").textContent = `${s.fill.toFixed(0)}%`;
+      $("fillBar").style.width = `${s.fill}%`;
+      $("fillBar").style.background = condition.color;
+      $("distanceValue").innerHTML = `${s.distance.toFixed(1)} <small style="font-size:.9rem;font-weight:600">cm</small>`;
+      $("lidValue").textContent = s.lid ? "Open" : "Closed";
+      $("lidFoot").textContent = s.lid ? "Lid is currently open" : "Lid is currently closed";
+      $("personValue").textContent = s.person ? "Detected" : "Absent";
+      $("personFoot").textContent = s.person ? "Person within detection range" : "No person currently detected";
+      $("conditionValue").textContent = condition.label;
+      $("conditionFoot").textContent = condition.label === "FULL" ? "Attention required" : "Fill threshold: 90%";
+      $("heroTitle").textContent = condition.label === "FULL" ? "Bin needs attention" : condition.label === "NEARLY FULL" ? "Plan collection soon" : "Your bin is being monitored";
+      $("heroDescription").textContent = condition.note;
+      $("healthStatus").textContent = condition.label;
+      $("healthStatus").style.color = condition.color;
+      $("healthNote").textContent = condition.note;
+      $("heroFillBar").style.width = `${s.fill}%`;
+      $("heroFillBar").style.background = condition.color;
+      $("capacityNote").textContent = `${s.fill.toFixed(0)}% of capacity used`;
+      $("lastUpdateChip").textContent = `Updated ${new Date(s.createdAt).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"})}`;
+      $("updated").textContent = new Date(s.createdAt).toLocaleString();
+      $("fillFoot").textContent = s.fill >= 90 ? "High fill level" : "Capacity occupied";
+      $("binWaste").setAttribute("d", wastePath(s.fill));
+      $("binWaste").setAttribute("fill", condition.color);
+      $("binLid").setAttribute("transform", s.lid ? "rotate(-24 40 39)" : "");
+      setConnection("live", "Connected · Live data");
+      setStatusChip("lastUpdateChip", `Updated ${new Date(s.createdAt).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}`, "good");
+      setStatusChip("pollStatus", `Auto-refresh every ${POLL_INTERVAL_MS / 1000} sec`, "info");
+      if (s.full === 1 || s.fill >= 90) setStatusChip("lastUpdateChip", "⚠ Bin full", "bad");
+      addEvents(s);
+    }
+
+    function wastePath(fill) {
+      const bottom = 145;
+      const top = 145 - (fill / 100) * 55;
+      return `M45 ${top} L115 ${top} L107 ${bottom} Q80 153 53 ${bottom} Z`;
+    }
+
+    function addEvents(s) {
+      if (!previousSnapshot) {
+        activityItems.unshift({ icon:"✓", title:"First reading received", detail:`Fill level is ${s.fill.toFixed(0)}%.` });
+      } else {
+        if (s.lid !== previousSnapshot.lid) activityItems.unshift({ icon:"↕", title:s.lid ? "Lid opened" : "Lid closed", detail:new Date(s.createdAt).toLocaleTimeString() });
+        if (s.person !== previousSnapshot.person) activityItems.unshift({ icon:"◎", title:s.person ? "Person detected" : "Person left detection range", detail:new Date(s.createdAt).toLocaleTimeString() });
+        if (previousSnapshot.full !== s.full) activityItems.unshift({ icon:"♻", title:s.full ? "Bin full threshold reached" : "Bin is no longer marked full", detail:`Fill level: ${s.fill.toFixed(0)}%.` });
+        if (Math.abs(s.fill - previousSnapshot.fill) >= 5) activityItems.unshift({ icon:"◒", title:"Fill level changed", detail:`${previousSnapshot.fill.toFixed(0)}% → ${s.fill.toFixed(0)}%.` });
+      }
+      previousSnapshot = s;
+      activityItems.splice(8);
+      renderEvents();
+    }
+
+    function renderEvents() {
+      const container = $("events");
+      if (!activityItems.length) {
+        container.innerHTML = '<p class="empty-state">Activity will appear after data arrives.</p>';
+        return;
+      }
+      container.innerHTML = "";
+      for (const event of activityItems) {
+        const row = document.createElement("div");
+        row.className = "event";
+        const symbol = document.createElement("div");
+        symbol.className = "event-symbol";
+        symbol.textContent = event.icon;
+        const body = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = event.title;
+        const detail = document.createElement("small");
+        detail.textContent = event.detail;
+        body.append(title, detail);
+        row.append(symbol, body);
+        container.append(row);
+      }
+    }
+
+    async function updateDashboard() {
+      if (!channelId) {
+        setConnection("waiting", "Channel ID required");
+        $("heroTitle").textContent = "Connect your channel";
+        $("heroDescription").textContent = "Enter your ThingSpeak Channel ID below to begin live monitoring.";
+        return;
+      }
+      try {
+        const data = await fetchJson(buildFeedsUrl(1));
+        const snapshot = parseSnapshot(data.feeds && data.feeds[0]);
+        renderSnapshot(snapshot);
+      } catch (error) {
+        setConnection("error", error.name === "AbortError" ? "Request timed out" : "Connection issue");
+        $("heroDescription").textContent = error.message || "Unable to load the latest sensor data.";
+        $("pollStatus").textContent = "Last refresh failed";
+      }
+    }
+
+    async function loadFillHistory() {
+      if (!channelId) return;
+      try {
+        const data = await fetchJson(buildFeedsUrl(chartRange));
+        const feeds = (data.feeds || []).filter(item =>
+          item.field1 !== null && item.field1 !== undefined &&
+          Number.isFinite(Number(item.field1)) &&
+          Number(item.field1) >= 0 && Number(item.field1) <= 100
+        );
+        const labels = feeds.map(item => new Date(item.created_at).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}));
+        const values = feeds.map(item => Number(item.field1));
+        const ctx = $("fillChart").getContext("2d");
+        if (!chart) {
+          chart = new Chart(ctx, {
+            type: "line",
+            data: { labels, datasets: [{
+              label: "Fill level (%)", data: values,
+              borderColor: "#55e39a", backgroundColor: "rgba(85,227,154,.12)",
+              borderWidth: 2, fill: true, tension: .32, pointRadius: 2,
+              pointHoverRadius: 5
+            }]},
+            options: {
+              responsive:true, maintainAspectRatio:false, animation:false,
+              interaction:{intersect:false,mode:"index"},
+              plugins:{
+                legend:{labels:{color:"#edf8f1"}},
+                tooltip:{callbacks:{label: context => ` ${context.parsed.y}% full`}}
+              },
+              scales:{
+                x:{ticks:{color:"#9ab4a5",maxTicksLimit:7},grid:{color:"rgba(154,180,165,.08)"}},
+                y:{min:0,max:100,ticks:{color:"#9ab4a5",callback:value=>`${value}%`},grid:{color:"rgba(154,180,165,.1)"}}
+              }
+            }
+          });
+        } else {
+          chart.data.labels = labels;
+          chart.data.datasets[0].data = values;
+          chart.update();
+        }
+      } catch (error) {
+        console.error("Fill history chart:", error);
+      }
+    }
+
+    function schedulePolling() {
+      clearInterval(pollTimer);
+      clearInterval(historyTimer);
+      updateDashboard();
+      loadFillHistory();
+      pollTimer = setInterval(updateDashboard, POLL_INTERVAL_MS);
+      historyTimer = setInterval(loadFillHistory, 60000);
+    }
+
+    $("settingsForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const nextChannel = $("channelId").value.trim();
+      if (!/^\d+$/.test(nextChannel)) {
+        $("channelId").setCustomValidity("Enter a numeric ThingSpeak Channel ID.");
+        $("channelId").reportValidity();
+        return;
+      }
+      $("channelId").setCustomValidity("");
+      channelId = nextChannel;
+      readApiKey = $("readKey").value.trim();
+      previousSnapshot = null;
+      activityItems.length = 0;
+      if (chart) {
+        chart.destroy();
+        chart = null;
+      }
+      schedulePolling();
+    });
+
+    $("channelId").addEventListener("input", () => $("channelId").setCustomValidity(""));
+    $("refreshBtn").addEventListener("click", () => { updateDashboard(); loadFillHistory(); });
+    document.querySelectorAll("[data-range]").forEach(button => {
+      button.addEventListener("click", () => {
+        chartRange = Number(button.dataset.range);
+        document.querySelectorAll("[data-range]").forEach(b => b.classList.toggle("active", b === button));
+        loadFillHistory();
+      });
+    });
+
+    $("channelId").value = channelId;
+    $("readKey").value = readApiKey;
+    if (channelId) schedulePolling();
+    else {
+      setConnection("waiting", "Channel ID required");
+      $("heroTitle").textContent = "Connect your channel";
+      $("heroDescription").textContent = "Enter your ThingSpeak Channel ID below to begin live monitoring.";
+    }
+  </script>
+</body>
+</html>
