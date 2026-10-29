@@ -140,14 +140,25 @@
           <p class="subtitle">IoT waste monitoring · Live system dashboard</p>
         </div>
       </div>
-      <div class="header-actions">
-        <span class="pill"><span id="connectionDot" class="dot"></span><span id="connectionText">Waiting for data</span></span>
-        <button class="btn" id="refreshBtn" type="button">↻ Refresh now</button>
-      </div>
+<div class="header-actions">
+  <span class="pill"><span id="connectionDot" class="dot"></span><span id="connectionText">Waiting for data</span></span>
+
+  <button class="btn" id="enableNotificationsBtn" type="button">
+    🔔 Enable Notifications
+  </button>
+
+  <button class="btn" id="refreshBtn" type="button">↻ Refresh now</button>
+</div>
     </div>
   </header>
 
   <main class="shell">
+    <div id="fullBinAlert" role="alert"
+     style="display:none; background:#7f1d1d; color:white;
+     padding:18px; margin-bottom:20px; border-radius:12px;
+     border:2px solid #ff626e; font-weight:bold; font-size:18px;">
+  ⚠️ BIN FULL! Please empty the dustbin.
+</div>
     <section class="overview">
       <article class="panel hero-panel">
         <div>
@@ -272,6 +283,34 @@
     let previousSnapshot = null;
     const activityItems = [];
     const $ = (id) => document.getElementById(id);
+    let fullNotificationShown = false;
+
+async function updateFullBinNotification(snapshot) {
+  const isFull = snapshot.full === 1 || snapshot.fill >= 100;
+  const alertBox = $("fullBinAlert");
+
+  // Show or hide the website warning banner.
+  alertBox.style.display = isFull ? "block" : "none";
+
+  if (!isFull) {
+    fullNotificationShown = false;
+    return;
+  }
+
+  // Avoid repeating the browser notification every 20 seconds.
+  if (fullNotificationShown) return;
+
+  fullNotificationShown = true;
+
+  // Browser notifications require permission from the user.
+  if ("Notification" in window &&
+      Notification.permission === "granted") {
+    new Notification("⚠️ Smart Eco-Bin: BIN FULL!", {
+      body: "The dustbin has reached 100% capacity. Please empty it.",
+      tag: "smart-eco-bin-full"
+    });
+  }
+}
 
     function setConnection(state, text) {
       $("connectionDot").className = "dot" + (state === "live" ? " live" : state === "error" ? " error" : "");
@@ -328,6 +367,7 @@
 
     function renderSnapshot(s) {
       const condition = conditionFrom(s.fill, s.full);
+      updateFullBinNotification(s);
       $("fillValue").textContent = `${s.fill.toFixed(0)}%`;
       $("fillBar").style.width = `${s.fill}%`;
       $("fillBar").style.background = condition.color;
@@ -496,6 +536,20 @@
 
     $("channelId").addEventListener("input", () => $("channelId").setCustomValidity(""));
     $("refreshBtn").addEventListener("click", () => { updateDashboard(); loadFillHistory(); });
+    $("enableNotificationsBtn").addEventListener("click", async () => {
+  if (!("Notification" in window)) {
+    alert("This browser does not support notifications.");
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+
+  if (permission === "granted") {
+    alert("Browser notifications enabled!");
+  } else {
+    alert("Notifications were not permitted. The website warning will still work.");
+  }
+});
     document.querySelectorAll("[data-range]").forEach(button => {
       button.addEventListener("click", () => {
         chartRange = Number(button.dataset.range);
